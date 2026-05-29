@@ -2,12 +2,11 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>ArUco Wound Tracker</title>
+    <title>Force-Start ArUco</title>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/aruco.js"></script>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/cv.js"></script>
     <style>
         body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        /* The container holds both the video and the overlay */
         #container { position: relative; width: 100%; max-width: 600px; }
         video { width: 100%; transform: scaleX(-1); display: block; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
@@ -19,7 +18,7 @@
     <div id="container">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <button id="btn">START DETECTION</button>
+        <button id="btn">START CAMERA</button>
     </div>
 
     <script>
@@ -30,38 +29,42 @@
         const detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
         btn.onclick = async () => {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            video.srcObject = stream;
-            btn.style.display = 'none';
-            
-            video.onloadedmetadata = () => {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: { ideal: 'environment' } } 
+                });
+                video.srcObject = stream;
+                await video.play();
+                btn.style.display = 'none';
+
+                // Force canvas sizing
+                canvas.width = 640;
+                canvas.height = 480;
+                
                 requestAnimationFrame(loop);
-            };
+            } catch (err) {
+                alert("Camera failed: " + err.message);
+            }
         };
 
         function loop() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // Use a temporary offscreen canvas for detection
+                // Draw to hidden buffer
                 let tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
+                tempCanvas.width = 640;
+                tempCanvas.height = 480;
                 let tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(video, 0, 0);
+                tempCtx.drawImage(video, 0, 0, 640, 480);
                 
-                let imageData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+                let imageData = tempCtx.getImageData(0, 0, 640, 480);
                 let markers = detector.detect(imageData);
 
-                // Clear previous drawings
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                // Draw red boxes
                 ctx.strokeStyle = "red";
                 ctx.lineWidth = 5;
+                
                 markers.forEach(m => {
                     ctx.beginPath();
-                    // Flip X for the overlay to match the mirrored video
                     ctx.moveTo(canvas.width - m.corners[0].x, m.corners[0].y);
                     ctx.lineTo(canvas.width - m.corners[1].x, m.corners[1].y);
                     ctx.lineTo(canvas.width - m.corners[2].x, m.corners[2].y);
