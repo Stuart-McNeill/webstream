@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Fixed Back Camera Tracker</title>
-    <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/aruco.js"></script>
-    <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/cv.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero-Dependency Tracker</title>
     <style>
         body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
         #container { position: relative; width: 100%; max-width: 600px; }
@@ -26,11 +25,16 @@
         const canvas = document.getElementById('overlay');
         const ctx = canvas.getContext('2d');
         const btn = document.getElementById('btn');
-        const detector = new AR.Detector({ dictionaryName: 'ARUCO' });
+        
+        let barcodeDetector;
+
+        // Initialize the browser's native detector if available
+        if ('BarcodeDetector' in window) {
+            barcodeDetector = new BarcodeDetector({ formats: ['qr_code', 'data_matrix'] });
+        }
 
         btn.onclick = async () => {
             try {
-                // Force the back camera
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: { exact: 'environment' } } 
                 });
@@ -38,40 +42,42 @@
                 await video.play();
                 btn.style.display = 'none';
 
+                // Set explicit canvas dimensions to match video aspect ratio
                 canvas.width = 640;
                 canvas.height = 480;
                 
                 requestAnimationFrame(loop);
             } catch (err) {
-                alert("Error: " + err.name + " - " + err.message);
+                alert("Camera Access Failed: " + err.name + "\n" + err.message);
             }
         };
 
-        function loop() {
+        async function loop() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                let tempCanvas = document.createElement('canvas');
-                tempCanvas.width = 640;
-                tempCanvas.height = 480;
-                let tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(video, 0, 0, 640, 480);
-                
-                let imageData = tempCtx.getImageData(0, 0, 640, 480);
-                let markers = detector.detect(imageData);
-
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 5;
                 
-                markers.forEach(m => {
-                    ctx.beginPath();
-                    // No mirror flip needed here if you aren't using scaleX(-1)
-                    ctx.moveTo(m.corners[0].x, m.corners[0].y);
-                    ctx.lineTo(m.corners[1].x, m.corners[1].y);
-                    ctx.lineTo(m.corners[2].x, m.corners[2].y);
-                    ctx.lineTo(m.corners[3].x, m.corners[3].y);
-                    ctx.closePath();
-                    ctx.stroke();
-                });
+                // If native detector is supported, look for markers/QR codes
+                if (barcodeDetector) {
+                    try {
+                        const barcodes = await barcodeDetector.detect(video);
+                        
+                        ctx.strokeStyle = "red";
+                        ctx.lineWidth = 5;
+                        
+                        barcodes.forEach(barcode => {
+                            const pts = barcode.cornerPoints;
+                            ctx.beginPath();
+                            ctx.moveTo(pts[0].x, pts[0].y);
+                            ctx.lineTo(pts[1].x, pts[1].y);
+                            ctx.lineTo(pts[2].x, pts[2].y);
+                            ctx.lineTo(pts[3].x, pts[3].y);
+                            ctx.closePath();
+                            ctx.stroke();
+                        });
+                    } catch (e) {
+                        console.error("Detection error:", e);
+                    }
+                }
             }
             requestAnimationFrame(loop);
         }
