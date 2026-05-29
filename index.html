@@ -1,35 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iPhone Camera Stream</title>
-    <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; }
-        video { width: 100%; max-width: 600px; transform: scaleX(-1); } /* Mirror for easy aiming */
-        button { padding: 15px 30px; font-size: 18px; cursor: pointer; }
-    </style>
-</head>
 <body>
-
-    <video id="video" autoplay playsinline></video>
-    <button id="startBtn">Start Camera</button>
-
+    <video id="video" width="640" height="480" autoplay playsinline style="transform: scaleX(-1);"></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    
+    <script src="https://docs.opencv.org/4.x/opencv.js"></script>
     <script>
         const video = document.getElementById('video');
-        const startBtn = document.getElementById('startBtn');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
 
-        startBtn.addEventListener('click', async () => {
+        async function startCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: { exact: 'environment' } } 
+            });
+            video.srcObject = stream;
+            
+            // Wait for video to be ready
+            video.onloadedmetadata = () => {
+                requestAnimationFrame(processVideo);
+            };
+        }
+
+        function processVideo() {
+            let cap = new cv.VideoCapture(video);
+            let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+            let gray = new cv.Mat();
+            
+            cap.read(frame);
+            cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+
+            // ArUco Detection
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: { exact: 'environment' } } // Use back camera
-                });
-                video.srcObject = stream;
-                startBtn.style.display = 'none';
+                let dictionary = new cv.getPredefinedDictionary(cv.DICT_4X4_50);
+                let detector = new cv.ArucoDetector(dictionary);
+                let corners = new cv.MatVector();
+                let ids = new cv.Mat();
+                
+                detector.detectMarkers(gray, corners, ids);
+                
+                if (ids.rows > 0) {
+                    cv.aruco.drawDetectedMarkers(frame, corners, ids);
+                }
+                
+                cv.imshow('canvas', frame);
+                
+                // Cleanup
+                corners.delete(); ids.delete();
             } catch (err) {
-                alert("Error accessing camera: " + err);
+                console.error("ArUco error: Is your opencv.js built with ArUco support?", err);
             }
-        });
+            
+            frame.delete(); gray.delete();
+            requestAnimationFrame(processVideo);
+        }
+
+        startCamera();
     </script>
 </body>
 </html>
