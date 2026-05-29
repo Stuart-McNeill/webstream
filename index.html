@@ -1,23 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Live Wound Tracker</title>
-    <script src="https://cdn.rawgit.com/jcmellado/js-aruco/master/src/aruco.js"></script>
-    <script src="https://cdn.rawgit.com/jcmellado/js-aruco/master/src/cv.js"></script>
+    <title>Robust ArUco Tracker</title>
+    <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/aruco.js"></script>
+    <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/cv.js"></script>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; }
-        canvas { width: 100%; max-width: 640px; }
+        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        /* The video remains hidden; we process via canvas */
+        video { display: none; }
+        canvas { width: 100%; max-width: 640px; border: 2px solid #333; }
     </style>
 </head>
 <body>
-    <video id="video" autoplay playsinline style="display:none"></video>
+    <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const detector = new AR.Detector();
+        // Default dictionary is ARUCO_MIP_36h12. 
+        // If your markers are standard 4x4, use { dictionaryName: 'ARUCO' }
+        const detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
         async function initCamera() {
             try {
@@ -31,37 +35,33 @@
                     requestAnimationFrame(loop);
                 };
             } catch (err) {
-                alert("Camera access denied: " + err);
+                alert("Camera error: " + err);
             }
         }
 
         function loop() {
-            // 1. Draw video to canvas with horizontal flip (mirror)
-            ctx.save();
-            ctx.scale(-1, 1);
-            ctx.drawImage(video, -canvas.width, 0);
-            ctx.restore();
-
-            // 2. Extract image data for detection
+            // 1. Draw raw frame to canvas (NO transformation here)
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 2. Extract ImageData
             let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // 3. Detect
             let markers = detector.detect(imageData);
 
-            // 3. Draw red box around detected marker
+            // 4. Draw overlays
             for (let i = 0; i < markers.length; i++) {
                 let m = markers[i];
                 ctx.strokeStyle = "red";
                 ctx.lineWidth = 5;
-                
                 ctx.beginPath();
-                // Mirror coordinates because the canvas is mirrored
-                ctx.moveTo(canvas.width - m.corners[0].x, m.corners[0].y);
-                ctx.lineTo(canvas.width - m.corners[1].x, m.corners[1].y);
-                ctx.lineTo(canvas.width - m.corners[2].x, m.corners[2].y);
-                ctx.lineTo(canvas.width - m.corners[3].x, m.corners[3].y);
+                ctx.moveTo(m.corners[0].x, m.corners[0].y);
+                ctx.lineTo(m.corners[1].x, m.corners[1].y);
+                ctx.lineTo(m.corners[2].x, m.corners[2].y);
+                ctx.lineTo(m.corners[3].x, m.corners[3].y);
                 ctx.closePath();
                 ctx.stroke();
-                
-                console.log("Marker ID found:", m.id);
+                console.log("Marker ID:", m.id);
             }
             requestAnimationFrame(loop);
         }
