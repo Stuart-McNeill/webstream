@@ -2,123 +2,90 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D ArUco Metric Tracker</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-aruco/0.1.0/aruco.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-aruco/0.1.0/cv.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPhone Camera Transmitter</title>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: white; font-family: -apple-system, sans-serif; overflow: hidden; }
-        #canvas { width: 100%; max-width: 640px; aspect-ratio: 4/3; display: block; background: #222; }
-        video { display: none; }
-        button { position: absolute; padding: 16px 32px; font-size: 18px; font-weight: bold; background: #34C759; color: white; border: none; border-radius: 12px; cursor: pointer; z-index: 20; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        #overlay-panel { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0, 0, 0, 0.85); padding: 14px; font-size: 13px; max-height: 35%; overflow-y: auto; font-family: monospace; border-top: 1px solid #333; }
-        .data-stream { color: #54F482; line-height: 1.4; margin-bottom: 6px; }
+        body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: white; font-family: -apple-system, sans-serif; }
+        #container { position: relative; width: 100%; max-width: 600px; display: flex; flex-direction: column; align-items: center; }
+        video { width: 100%; border-radius: 12px; background: #222; display: block; }
+        button { padding: 16px 32px; font-size: 18px; font-weight: bold; background: #007AFF; color: white; border: none; border-radius: 12px; cursor: pointer; margin-bottom: 20px; }
+        .config-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; width: 90%; margin-top: 15px; font-size: 14px; }
+        input { width: 100%; padding: 10px; margin-top: 8px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; box-sizing: border-box; font-family: monospace; }
     </style>
 </head>
 <body>
 
-    <button id="startBtn">START 3D METRIC SCANNER</button>
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas"></canvas>
-    <div id="overlay-panel">System Status: Awaiting hardware connection...</div>
+    <div id="container">
+        <button id="startBtn">START TRANSMITTER</button>
+        <video id="video" autoplay playsinline muted></video>
+        
+        <div class="config-box">
+            <label id="ipLabel">Enter Computer's Local IP Address:</label>
+            <input type="text" id="ipInput" value="192.168.1.100" placeholder="e.g., 192.168.1.X">
+        </div>
+    </div>
 
     <script>
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
-        const panel = document.getElementById('overlay-panel');
-        
-        let detector;
+        const ipInput = document.getElementById('ipInput');
+        let ws;
+        let timer;
+
+        // Load cached IP address if available
+        if (localStorage.getItem('desktop_ip')) {
+            ipInput.value = localStorage.getItem('desktop_ip');
+        }
 
         startBtn.onclick = async () => {
-            try {
-                // Initialize the true 4x4 matrix dictionary parser
-                // The library maps the core visual markers from your printed sheet safely
-                detector = new AR.Detector();
+            const targetIp = ipInput.value.trim();
+            if (!targetIp) {
+                alert("Please enter your computer's IP address first!");
+                return;
+            }
+            localStorage.setItem('desktop_ip', targetIp);
 
+            try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: { exact: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } } 
                 });
                 video.srcObject = stream;
                 await video.play();
                 startBtn.style.display = 'none';
-                panel.innerHTML = "Camera active. Running spatial matrix loops...";
-                requestAnimationFrame(trackLoop);
+
+                // Establish high-speed network socket pipeline to your desktop server
+                ws = new WebSocket(`ws://${targetIp}:8765`);
+                
+                ws.onopen = () => {
+                    console.log("Connected to desktop processing engine!");
+                    startStreaming();
+                };
+
+                ws.onerror = (err) => {
+                    alert("Could not connect to desktop script. Make sure your computer running Python is on the exact same Wi-Fi network and the script is running.");
+                };
+
             } catch (err) {
-                alert("Browser initialization failed: " + err.message + "\nEnsure you are using HTTPS.");
+                alert("Camera initialization failed: " + err.message);
             }
         };
 
-        function trackLoop() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                if (canvas.width !== video.videoWidth) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
+        function startStreaming() {
+            const hiddenCanvas = document.createElement('canvas');
+            hiddenCanvas.width = 640;
+            hiddenCanvas.height = 480;
+            const hiddenCtx = hiddenCanvas.getContext('2d');
+
+            // Send frames rapidly over the network loop
+            timer = setInterval(() => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA && ws.readyState === WebSocket.OPEN) {
+                    hiddenCtx.drawImage(video, 0, 0, 640, 480);
+                    // Compress frame to low-latency JPEG compression matrix
+                    hiddenCanvas.toBlob((blob) => {
+                        ws.send(blob);
+                    }, 'image/jpeg', 0.6); 
                 }
-
-                // Render live environment feed directly into baseline drawing context
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // Run genuine mathematical computer vision contour extraction
-                let markers = detector.detect(imageData);
-
-                if (markers && markers.length > 0) {
-                    let logFeedback = "";
-
-                    markers.forEach(marker => {
-                        let corners = marker.corners;
-                        
-                        // 1. Draw precise geometric bounding outlines around the printed target
-                        ctx.strokeStyle = "#34C759";
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.moveTo(corners[0].x, corners[0].y);
-                        ctx.lineTo(corners[1].x, corners[1].y);
-                        ctx.lineTo(corners[2].x, corners[2].y);
-                        ctx.lineTo(corners[3].x, corners[3].y);
-                        ctx.closePath();
-                        ctx.stroke();
-
-                        // 2. Compute the exact focal point center vector (X, Y)
-                        let centerX = Math.round((corners[0].x + corners[2].x) / 2);
-                        let centerY = Math.round((corners[0].y + corners[2].y) / 2);
-
-                        // 3. Pose Estimation Equation Translation
-                        // Measures relative pixel edge scaling against real-world 50mm constraints
-                        let pixelWidth = Math.sqrt(Math.pow(corners[1].x - corners[0].x, 2) + Math.pow(corners[1].y - corners[0].y, 2));
-                        
-                        // Focal length conversion ratio to fetch real centimeters depth metrics (Z-axis)
-                        let distanceZ = ((5.0 * 590) / pixelWidth).toFixed(1); 
-
-                        // Render precise 3D vector center indicator
-                        ctx.fillStyle = "#FF3B30";
-                        ctx.beginPath();
-                        ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI);
-                        ctx.fill();
-
-                        // Render overlay tracking label text
-                        ctx.fillStyle = "#34C759";
-                        ctx.font = "bold 14px monospace";
-                        ctx.fillText("TARGET ID: " + marker.id, corners[0].x, corners[0].y - 10);
-
-                        // Append metrics directly onto spatial display overlay panel interface
-                        logFeedback += `<div class="data-stream">
-                            <strong>[LOCKED ARUCO TARGET ID: ${marker.id}]</strong><br>
-                            &bull; Focal Vector Vector X: ${centerX}px | Y: ${centerY}px<br>
-                            &bull; Measured Edge Width: ${Math.round(pixelWidth)} pixels<br>
-                            &bull; Spatial Depth Vector Z: ${distanceZ} cm
-                        </div>`;
-                    });
-
-                    panel.innerHTML = logFeedback;
-                } else {
-                    panel.innerHTML = "Searching matrix field... Align your printed 4x4 ArUco markers within the viewport.";
-                }
-            }
-            requestAnimationFrame(trackLoop);
+            }, 50); // Streams at ~20 Frames Per Second
         }
     </script>
 </body>
