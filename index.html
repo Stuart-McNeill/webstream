@@ -1,12 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>Live Wound Tracker</title>
     <script src="https://cdn.rawgit.com/jcmellado/js-aruco/master/src/aruco.js"></script>
     <script src="https://cdn.rawgit.com/jcmellado/js-aruco/master/src/cv.js"></script>
+    <style>
+        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; }
+        canvas { width: 100%; max-width: 640px; }
+    </style>
 </head>
 <body>
     <video id="video" autoplay playsinline style="display:none"></video>
-    <canvas id="canvas" style="transform: scaleX(-1);"></canvas>
+    <canvas id="canvas"></canvas>
 
     <script>
         const video = document.getElementById('video');
@@ -14,36 +19,54 @@
         const ctx = canvas.getContext('2d');
         const detector = new AR.Detector();
 
-        async function start() {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: { exact: 'environment' } } 
-            });
-            video.srcObject = stream;
-            video.onloadedmetadata = () => {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                requestAnimationFrame(loop);
-            };
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: { exact: 'environment' } } 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    requestAnimationFrame(loop);
+                };
+            } catch (err) {
+                alert("Camera access denied: " + err);
+            }
         }
 
         function loop() {
-            ctx.drawImage(video, 0, 0);
+            // 1. Draw video to canvas with horizontal flip (mirror)
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, -canvas.width, 0);
+            ctx.restore();
+
+            // 2. Extract image data for detection
             let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             let markers = detector.detect(imageData);
 
-            // Draw markers if detected
+            // 3. Draw red box around detected marker
             for (let i = 0; i < markers.length; i++) {
                 let m = markers[i];
                 ctx.strokeStyle = "red";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(m.corners[0].x, m.corners[0].y, 
-                               m.corners[1].x - m.corners[0].x, 
-                               m.corners[2].y - m.corners[1].y);
+                ctx.lineWidth = 5;
+                
+                ctx.beginPath();
+                // Mirror coordinates because the canvas is mirrored
+                ctx.moveTo(canvas.width - m.corners[0].x, m.corners[0].y);
+                ctx.lineTo(canvas.width - m.corners[1].x, m.corners[1].y);
+                ctx.lineTo(canvas.width - m.corners[2].x, m.corners[2].y);
+                ctx.lineTo(canvas.width - m.corners[3].x, m.corners[3].y);
+                ctx.closePath();
+                ctx.stroke();
+                
                 console.log("Marker ID found:", m.id);
             }
             requestAnimationFrame(loop);
         }
-        start();
+
+        initCamera();
     </script>
 </body>
 </html>
