@@ -1,72 +1,70 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Robust ArUco Tracker</title>
+    <title>Fixed Live ArUco Tracker</title>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/aruco.js"></script>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/cv.js"></script>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        /* The video remains hidden; we process via canvas */
-        video { display: none; }
-        canvas { width: 100%; max-width: 640px; border: 2px solid #333; }
+        body { margin: 0; background: #000; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+        #canvas { width: 100%; max-width: 640px; border: 2px solid red; }
+        #startBtn { padding: 20px 40px; font-size: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <video id="video" autoplay playsinline></video>
+    <button id="startBtn">TAP TO START CAMERA</button>
+    <video id="video" autoplay playsinline style="display:none"></video>
     <canvas id="canvas"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        // Default dictionary is ARUCO_MIP_36h12. 
-        // If your markers are standard 4x4, use { dictionaryName: 'ARUCO' }
+        const startBtn = document.getElementById('startBtn');
         const detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
-        async function initCamera() {
+        async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: { exact: 'environment' } } 
                 });
                 video.srcObject = stream;
+                // Wait until the video is actually ready to play
                 video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    requestAnimationFrame(loop);
+                    video.play().then(() => {
+                        startBtn.style.display = 'none';
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        requestAnimationFrame(loop);
+                    });
                 };
             } catch (err) {
-                alert("Camera error: " + err);
+                alert("Camera Error: " + err);
             }
         }
 
         function loop() {
-            // 1. Draw raw frame to canvas (NO transformation here)
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // 2. Extract ImageData
-            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            
-            // 3. Detect
-            let markers = detector.detect(imageData);
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                let markers = detector.detect(imageData);
 
-            // 4. Draw overlays
-            for (let i = 0; i < markers.length; i++) {
-                let m = markers[i];
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 5;
-                ctx.beginPath();
-                ctx.moveTo(m.corners[0].x, m.corners[0].y);
-                ctx.lineTo(m.corners[1].x, m.corners[1].y);
-                ctx.lineTo(m.corners[2].x, m.corners[2].y);
-                ctx.lineTo(m.corners[3].x, m.corners[3].y);
-                ctx.closePath();
-                ctx.stroke();
-                console.log("Marker ID:", m.id);
+                for (let i = 0; i < markers.length; i++) {
+                    let m = markers[i];
+                    ctx.strokeStyle = "red";
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.moveTo(m.corners[0].x, m.corners[0].y);
+                    ctx.lineTo(m.corners[1].x, m.corners[1].y);
+                    ctx.lineTo(m.corners[2].x, m.corners[2].y);
+                    ctx.lineTo(m.corners[3].x, m.corners[3].y);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
             }
             requestAnimationFrame(loop);
         }
 
-        initCamera();
+        startBtn.addEventListener('click', startCamera);
     </script>
 </body>
 </html>
