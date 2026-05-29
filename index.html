@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPhone Camera Stream</title>
+    <style>
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; }
+        video { width: 100%; max-width: 600px; transform: scaleX(-1); } /* Mirror for easy aiming */
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <video id="video" autoplay playsinline></video>
+    <button id="startBtn">Start Camera</button>
+
+    <script>
+        const video = document.getElementById('video');
+        const startBtn = document.getElementById('startBtn');
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: { exact: 'environment' } } // Use back camera
+                });
+                video.srcObject = stream;
+                startBtn.style.display = 'none';
+            } catch (err) {
+                alert("Error accessing camera: " + err);
+            }
+        });
+    </script>
+</body>
+</html>
