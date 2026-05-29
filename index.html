@@ -1,70 +1,70 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Fixed Live ArUco Tracker</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPhone Camera Stream + ArUco</title>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/aruco.js"></script>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/cv.js"></script>
     <style>
-        body { margin: 0; background: #000; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-        #canvas { width: 100%; max-width: 640px; border: 2px solid red; }
-        #startBtn { padding: 20px 40px; font-size: 20px; cursor: pointer; }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; }
+        /* Your working video setup */
+        video { width: 100%; max-width: 600px; transform: scaleX(-1); }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; position: absolute; }
+        /* Hidden canvas for processing */
+        #hiddenCanvas { display: none; }
     </style>
 </head>
 <body>
-    <button id="startBtn">TAP TO START CAMERA</button>
-    <video id="video" autoplay playsinline style="display:none"></video>
-    <canvas id="canvas"></canvas>
+
+    <video id="video" autoplay playsinline></video>
+    <button id="startBtn">Start Camera</button>
+    <canvas id="hiddenCanvas"></canvas>
 
     <script>
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
+        const hiddenCanvas = document.getElementById('hiddenCanvas');
+        const hiddenCtx = hiddenCanvas.getContext('2d');
         const detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
-        async function startCamera() {
+        startBtn.addEventListener('click', async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: { exact: 'environment' } } 
                 });
                 video.srcObject = stream;
-                // Wait until the video is actually ready to play
+                startBtn.style.display = 'none';
+                
+                // Once video starts, wait for metadata then start loop
                 video.onloadedmetadata = () => {
-                    video.play().then(() => {
-                        startBtn.style.display = 'none';
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        requestAnimationFrame(loop);
-                    });
+                    hiddenCanvas.width = video.videoWidth;
+                    hiddenCanvas.height = video.videoHeight;
+                    requestAnimationFrame(processFrame);
                 };
             } catch (err) {
-                alert("Camera Error: " + err);
+                alert("Error: " + err);
             }
-        }
+        });
 
-        function loop() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                let markers = detector.detect(imageData);
+        function processFrame() {
+            // 1. Copy live video frame to hidden canvas
+            hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            
+            // 2. Extract image data
+            let imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            
+            // 3. Detect
+            let markers = detector.detect(imageData);
 
-                for (let i = 0; i < markers.length; i++) {
-                    let m = markers[i];
-                    ctx.strokeStyle = "red";
-                    ctx.lineWidth = 5;
-                    ctx.beginPath();
-                    ctx.moveTo(m.corners[0].x, m.corners[0].y);
-                    ctx.lineTo(m.corners[1].x, m.corners[1].y);
-                    ctx.lineTo(m.corners[2].x, m.corners[2].y);
-                    ctx.lineTo(m.corners[3].x, m.corners[3].y);
-                    ctx.closePath();
-                    ctx.stroke();
-                }
+            // 4. Report
+            if (markers.length > 0) {
+                console.log("Detected Marker ID:", markers[0].id);
+                // You can add an alert or update an element here
             }
-            requestAnimationFrame(loop);
+            
+            requestAnimationFrame(processFrame);
         }
-
-        startBtn.addEventListener('click', startCamera);
     </script>
 </body>
 </html>
