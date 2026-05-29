@@ -7,57 +7,61 @@
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/aruco.js"></script>
     <script src="https://cdn.rawgit.com/damianofalcioni/js-aruco2/master/src/cv.js"></script>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: white; font-family: sans-serif; }
         video { width: 100%; max-width: 600px; transform: scaleX(-1); background: #333; }
-        button { padding: 20px 40px; font-size: 20px; cursor: pointer; position: absolute; }
-        #hiddenCanvas { display: none; }
+        button { padding: 20px 40px; font-size: 20px; cursor: pointer; position: absolute; z-index: 10; }
+        #status { position: absolute; top: 10px; color: yellow; }
     </style>
 </head>
 <body>
 
+    <div id="status">Status: Ready</div>
     <video id="video" autoplay playsinline muted></video>
     <button id="startBtn">START CAMERA</button>
-    <canvas id="hiddenCanvas"></canvas>
+    <canvas id="hiddenCanvas" style="display:none;"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const startBtn = document.getElementById('startBtn');
+        const status = document.getElementById('status');
         const hiddenCanvas = document.getElementById('hiddenCanvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
         const detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
         startBtn.addEventListener('click', async () => {
+            status.innerText = "Status: Requesting camera...";
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: { exact: 'environment' } } 
                 });
                 video.srcObject = stream;
+                
+                // Force play
                 await video.play();
                 startBtn.style.display = 'none';
+                status.innerText = "Status: Camera active, detecting...";
 
-                video.onloadedmetadata = () => {
-                    hiddenCanvas.width = video.videoWidth;
-                    hiddenCanvas.height = video.videoHeight;
-                    requestAnimationFrame(processFrame);
-                };
+                // Start loop immediately
+                hiddenCanvas.width = 640; 
+                hiddenCanvas.height = 480;
+                requestAnimationFrame(processFrame);
+
             } catch (err) {
-                alert("Error: " + err.message);
+                status.innerText = "Error: " + err.message;
             }
         });
 
         function processFrame() {
-            // Copy the live frame to the hidden processing canvas
-            hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
-            let imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
-            
-            // Detect markers
-            let markers = detector.detect(imageData);
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                let imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                let markers = detector.detect(imageData);
 
-            // Log to console so you can verify it's working
-            if (markers.length > 0) {
-                console.log("Marker Found! ID:", markers[0].id);
+                if (markers.length > 0) {
+                    status.innerText = "Status: Found ID " + markers[0].id;
+                    console.log("Marker Found! ID:", markers[0].id);
+                }
             }
-            
             requestAnimationFrame(processFrame);
         }
     </script>
