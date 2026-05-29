@@ -1,61 +1,49 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
+<head>
+    <script src="https://cdn.rawgit.com/jcmellado/js-aruco/master/src/aruco.js"></script>
+    <script src="https://cdn.rawgit.com/jcmellado/js-aruco/master/src/cv.js"></script>
+</head>
 <body>
-    <video id="video" width="640" height="480" autoplay playsinline style="transform: scaleX(-1);"></video>
-    <canvas id="canvas" width="640" height="480"></canvas>
-    
-    <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <video id="video" autoplay playsinline style="display:none"></video>
+    <canvas id="canvas" style="transform: scaleX(-1);"></canvas>
+
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const detector = new AR.Detector();
 
-        async function startCamera() {
+        async function start() {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: { exact: 'environment' } } 
             });
             video.srcObject = stream;
-            
-            // Wait for video to be ready
             video.onloadedmetadata = () => {
-                requestAnimationFrame(processVideo);
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                requestAnimationFrame(loop);
             };
         }
 
-        function processVideo() {
-            let cap = new cv.VideoCapture(video);
-            let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-            let gray = new cv.Mat();
-            
-            cap.read(frame);
-            cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+        function loop() {
+            ctx.drawImage(video, 0, 0);
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let markers = detector.detect(imageData);
 
-            // ArUco Detection
-            try {
-                let dictionary = new cv.getPredefinedDictionary(cv.DICT_4X4_50);
-                let detector = new cv.ArucoDetector(dictionary);
-                let corners = new cv.MatVector();
-                let ids = new cv.Mat();
-                
-                detector.detectMarkers(gray, corners, ids);
-                
-                if (ids.rows > 0) {
-                    cv.aruco.drawDetectedMarkers(frame, corners, ids);
-                }
-                
-                cv.imshow('canvas', frame);
-                
-                // Cleanup
-                corners.delete(); ids.delete();
-            } catch (err) {
-                console.error("ArUco error: Is your opencv.js built with ArUco support?", err);
+            // Draw markers if detected
+            for (let i = 0; i < markers.length; i++) {
+                let m = markers[i];
+                ctx.strokeStyle = "red";
+                ctx.lineWidth = 3;
+                ctx.strokeRect(m.corners[0].x, m.corners[0].y, 
+                               m.corners[1].x - m.corners[0].x, 
+                               m.corners[2].y - m.corners[1].y);
+                console.log("Marker ID found:", m.id);
             }
-            
-            frame.delete(); gray.delete();
-            requestAnimationFrame(processVideo);
+            requestAnimationFrame(loop);
         }
-
-        startCamera();
+        start();
     </script>
 </body>
 </html>
